@@ -157,7 +157,7 @@ class StepDecoder(Component):
 
     @mute_button.pressed
     def on_mute(self, *a):
-        if self.shift_button.is_pressed:
+        if self.shift_button.is_pressed and self._sequencer is not None:
             self._sequencer.clear_all()
 
     def refresh_all_leds(self):
@@ -197,18 +197,6 @@ class StepDecoder(Component):
                     is_acc = ""
 
                 state.color = "StepButton." + is_active + is_step + is_acc
-
-                # is_active = value
-                # if :
-                #     if value:
-                #         state.color = "StepButton.ActiveStep"
-                #     else:
-                #         state.color = "StepButton.InactiveStep"
-                # else:
-                #     if value:
-                #         state.color = "StepButton.Active"
-                #     else:
-                #         state.color = "StepButton.Inactive"
 
     def update_instrument_leds(self):
         if not self._sequencer:

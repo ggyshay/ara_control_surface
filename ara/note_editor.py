@@ -1,37 +1,13 @@
-from ableton.v3.base import depends, listenable_property, listens
+import logging
+from typing import Any, Optional
+
 from ableton.v3.control_surface import Component
-from ableton.v3.control_surface.controls import ButtonControl, control_matrix
 from ableton.v3.live import liveobj_changed, liveobj_valid
 from Live.Clip import MidiNoteSpecification  # type: ignore
-import logging
+
 from .sequencer import Sequencer
-from typing import Optional, Any
 
 logger = logging.getLogger("ara")
-
-
-# def get_notes(clip, pitches, time, length, all_pitches=False):
-#     if len(pitches) > 1 or all_pitches:
-#         return clip.get_notes_extended(
-#             from_time=time, from_pitch=0, time_span=length, pitch_span=128
-#         )
-#     return clip.get_notes_extended(
-#         from_time=time, from_pitch=(pitches[0]), time_span=length, pitch_span=1
-#     )
-
-
-# def remove_notes(clip, pitches, time, length, all_pitches=False):
-#     """
-#     Remove notes for each pitch in pitches at the given time and length.
-#     """
-#     if len(pitches) > 1 or all_pitches:
-#         clip.remove_notes_extended(
-#             from_time=time, from_pitch=0, time_span=length, pitch_span=128
-#         )
-#     else:
-#         clip.remove_notes_extended(
-#             from_time=time, from_pitch=(pitches[0]), time_span=length, pitch_span=1
-#         )
 
 
 def assert_clip_valid(clip):
@@ -48,15 +24,6 @@ def assert_clip_valid(clip):
 
 
 class NoteEditorComponent(Component):
-    """
-    This is duplicated from the original ableton/v3
-
-    """
-
-    ## no fucking idea what this is
-    # __events__ = ('clip_notes', )
-
-    ## not sure how this works, but I think it only validates these dependencies when the component is enabled, nope
     def __init__(
         self,
         name="Note_Editor",
@@ -76,12 +43,6 @@ class NoteEditorComponent(Component):
 
         assert sequencer is not None
         self._sequencer = sequencer
-
-        ## this errors for some reason
-        ## EventError: Object <Clip.Clip object at 0x138a99ce0> missing "add" method for event: clip
-        # logger.info("Setting callbacks")
-        # self._AraNoteEditorComponent__on_sequencer_clip_changed.subject = sequencer_clip
-        # self._AraNoteEditorComponent__on_sequencer_clip_changed()
 
     def create_note(self, pitch, time, acc):
         assert self._has_clip()
@@ -143,28 +104,3 @@ class NoteEditorComponent(Component):
         assert self._clip is not None
 
         self._clip.remove_notes_extended(0, 0, 100, 128)
-
-        ####################################################################################################
-
-        # self._NoteEditorComponent__on_clip_notes_changed.subject = clip
-        # self._NoteEditorComponent__on_clip_notes_changed()
-
-    # @listens("notes")
-    # def __on_clip_notes_changed(self):
-    #     self._clip_notes = []
-    #     if self._has_clip():
-    #         if self._can_edit():
-    #             start, length = self._get_clip_notes_time_range()
-    #             self._clip_notes = get_notes(
-    #                 self._clip,
-    #                 self._pitches,
-    #                 start,
-    #                 length,
-    #                 self._pitch_provider.is_polyphonic,
-    #             )
-    #     self._update_editor_matrix()
-    #     self.notify_clip_notes()
-
-    # @listens("clip")
-    # def __on_sequencer_clip_changed(self):
-    #     self.set_clip(self._sequencer_clip.clip)

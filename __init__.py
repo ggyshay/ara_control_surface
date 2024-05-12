@@ -9,28 +9,19 @@ from ableton.v3.control_surface import (
     ControlSurfaceSpecification,
     create_skin,
 )
-from ableton.v3.control_surface.elements import ButtonElement, ButtonMatrixElement
-from ableton.v3.control_surface import MIDI_NOTE_TYPE
-from ableton.v3.control_surface.layer import Layer
-from ableton.v3.control_surface.components import (  # VelocityLevelsComponent,
+from ableton.v3.control_surface.components import (
     create_sequencer_clip,
 )
 
 from . import ara
 
-# from .ara.sequencer import Sequencer
-
-
-# from typing import Any, Optional, Tuple, Callable
 
 logger = logging.getLogger("ara")
 
 
 def create_mappings(control_surface):
     mappings = {}
-    # "Drum_Group": ara.DrumGroupComponent,
-    #     "Note_Editor": ara.NoteEditorComponent,
-    #     "StepDecoder": ara.StepDecoder,
+
     mappings["StepDecoder"] = dict(
         matrix="steps_buttons",
         instrument_matrix="instruments_buttons",
@@ -41,7 +32,7 @@ def create_mappings(control_surface):
         fill_button="fill_button",
         encoder_matrix="encoder_matrix",
     )
-    # mappings["Drum_Group"] = dict(matrix="instruments_buttons")
+
     return mappings
 
 
@@ -50,7 +41,6 @@ class Specification(ControlSurfaceSpecification):
     control_surface_skin = create_skin(skin=ara.Skin)
     create_mappings_function = create_mappings
     component_map = {
-        # "Drum_Group": ara.DrumGroupComponent,
         "Note_Editor": ara.NoteEditorComponent,
         "StepDecoder": ara.StepDecoder,
     }
@@ -96,7 +86,6 @@ class ARA(ControlSurface):
             self._skin = create_skin(skin=ara.Skin, colors=ara.Rgb)
 
             logger.info("   adding listeners")
-            # self._ARA__on_main_view_changed.subject = self.application.view
 
             self._ARA__on_selected_track_changed.subject = self.song.view
 
@@ -105,33 +94,23 @@ class ARA(ControlSurface):
             logger.info("creating components")
             logger.info("   creating sequencer")
             self.create_sequencer()
-            # logger.info("   creating decoder")
-            # self.create_decoder()
-            # logger.info("   creating drum component")
-            # self.create_drum_component()
+
             logger.info("   creating note editor")
             self.create_note_editor()
 
             self._sequencer.set_editor(self._note_editor)
 
-            # self._step_decoder.sequencer = self._sequencer
             self.component_map["StepDecoder"].sequencer = self._sequencer
-            # self.component_map["Drum_Group"].sequencer = self._sequencer
-            # self.component_map["Drum_Group"].update_leds()
+
             logger.info(f" ara is enabled= {self._enabled}")
             self.component_map["StepDecoder"].refresh_all_leds()
             self.component_map["StepDecoder"].try_lock_callback = self.try_lock_track
 
             self.get_target_track()
             self.create_clip()
-            # self.drum_group = self.create_drum_component()
 
     def get_target_track(self) -> None:
-        # self.target_track = self.song.view.selected_track
-        # logger.info(f"Target track: {self.target_track.name}")
-        # logger.info("creating clip")
-        # self.target_clip = create_sequencer_clip(self.target_track, 4)
-        # logger.info("creating clip done")
+
         self.target_track = None
         tracks = self.song.tracks
         for track in tracks:
@@ -221,7 +200,7 @@ class ARA(ControlSurface):
 
     @listens("playing_position")
     def __on_playhead_move(self):
-        # logger.info(f"position={self.target_clip.playing_position}")
+
         if self.target_clip is not None:
             self._sequencer.set_position(self.target_clip.playing_position)
 
