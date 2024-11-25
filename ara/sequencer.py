@@ -33,6 +33,35 @@ class Sequencer:
     def set_device(self, device):
         self._device = device
 
+    def syncState(self):
+        if self._device is None:
+            logger.info("Tryied to sync state without a device")
+            return
+
+        self.instrument_mute = [
+            self._device.drum_pads[instrument + START_DRUM_NOTE].mute
+            for instrument in range(8)
+        ]
+
+        notes = self._editor.get_clip_notes()
+        self.state, self.acc = self.notesToState(notes)
+        self._current_length = int(self._editor.get_clip_length() * 4)
+
+        logger.info(f"Synced state with device: {self.instrument_mute}")
+
+    def notesToState(self, notes):
+        notes = [note for note in notes if note.pitch >= START_DRUM_NOTE]
+        notes = [note for note in notes if note.pitch < START_DRUM_NOTE + 8]
+        state = [[False for _ in range(16 * 4)] for _ in range(8)]
+        acc = [[False for _ in range(16 * 4)] for _ in range(8)]
+        for note in notes:
+            note.start_time = int(note.start_time * 4)
+            state[int(note.pitch - START_DRUM_NOTE)][int(note.start_time)] = True
+            acc[int(note.pitch - START_DRUM_NOTE)][int(note.start_time)] = (
+                note.velocity == 127
+            )
+        return state, acc
+
     @property
     def selected_instrument(self):
         return self._selected_instrument

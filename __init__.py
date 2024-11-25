@@ -9,14 +9,33 @@ from ableton.v3.control_surface import (
     ControlSurfaceSpecification,
     create_skin,
 )
-from ableton.v3.control_surface.components import (
-    create_sequencer_clip,
+
+from ableton.v3.control_surface.capabilities import (
+    CONTROLLER_ID_KEY,
+    NOTES_CC,
+    PORTS_KEY,
+    REMOTE,
+    SCRIPT,
+    controller_id,
+    inport,
+    outport,
 )
 
 from . import ara
 
 
 logger = logging.getLogger("ara")
+
+
+def get_capabilities():
+    return {
+        CONTROLLER_ID_KEY: controller_id(
+            vendor_id=5824,
+            product_ids=[1161],
+            model_name=["ARAv2"],
+        ),
+        PORTS_KEY: [inport(props=[NOTES_CC, SCRIPT, REMOTE]), outport(props=[SCRIPT])],
+    }
 
 
 def create_mappings(control_surface):
@@ -60,6 +79,7 @@ class ARA(ControlSurface):
 
         self.show_message("ARA: init mate")
         logger.info("ARA: init started ...")
+        self.schedule_message(3, self.reflect_device)
 
     def setup(self):
         super().setup()
@@ -78,6 +98,7 @@ class ARA(ControlSurface):
     def init(self):
         self.reload_imports()
         self.target_clip = None
+        self.target_clip_slot_index = None
         self.target_track = None
         self.target_device = None
         logger.info("init started:")
@@ -104,10 +125,14 @@ class ARA(ControlSurface):
 
             logger.info(f" ara is enabled= {self._enabled}")
             self.component_map["StepDecoder"].refresh_all_leds()
-            self.component_map["StepDecoder"].try_lock_callback = self.try_lock_track
+            self.component_map["StepDecoder"].try_lock_callback = (
+                lambda: self.try_lock_track()
+            )
+            self.component_map["StepDecoder"].send_midi = self._send_midi
 
             self.get_target_track()
             self.create_clip()
+            self.reflect_device()
 
     def get_target_track(self) -> None:
 
@@ -116,24 +141,45 @@ class ARA(ControlSurface):
         for track in tracks:
             if track.name.lower() == "ara":
                 self.target_track = track
+                self._ARA__on_playing_clip_changed.subject = self.target_track
                 break
 
         self.create_clip()
+        self.reflect_device()
+
+    def try_lock_track(self):
+        logger.info(f"try lock track {self.song.view.selected_track.name}")
+        self.target_track = self.song.view.selected_track
+        self._ARA__on_playing_clip_changed.subject = self.target_track
+
+        self.create_clip()
+        self.reflect_device()
+
+    def assign_target_clip(self):
+        self._note_editor.set_clip(self.target_clip)
+        self._ARA__on_playhead_move.subject = self.target_clip
+        self.try_grab_device()
+        self._sequencer.clear_all()
+        self._sequencer.syncState()
 
     def create_clip(self):
-        if self.target_track is not None:
-            self._ARA__on_devices_changed.subject = self.target_track
+        if self.target_track is None:
+            return
 
-            logger.info(f"Target track: {self.target_track.name}")
-            logger.info("creating clip")
-            self.target_clip = create_sequencer_clip(self.target_track, 4)
-            self._note_editor.set_clip(self.target_clip)
+        logger.info(f"Target track: {self.target_track.name}")
+        self._ARA__on_devices_changed.subject = self.target_track
 
-            self._ARA__on_playhead_move.subject = self.target_clip
-            self.try_grab_device()
-            self._sequencer.clear_all()
+        slot = self.target_track.clip_slots[0]
+        if slot.has_clip:
+            self.target_clip = slot.clip
+            self.target_clip.fire()
+        else:
+            self.target_clip = slot.create_clip(4)
+            slot.fire()
 
-            logger.info("creating clip done")
+        self.assign_target_clip()
+
+        logger.info("creating clip done")
 
     def try_grab_device(self):
         if self.target_track is None:
@@ -154,10 +200,13 @@ class ARA(ControlSurface):
             self._sequencer.set_device(device)
             self.component_map["StepDecoder"].set_device(device)
 
-    def try_lock_track(self):
-        logger.info(f"try lock track {self.song.view.selected_track.name}")
-        self.target_track = self.song.view.selected_track
-        self.create_clip()
+    def reflect_device(self):
+        logger.info("reflecting device")
+        if getattr(self._sequencer, "_device", None) is None:
+            return
+        self._sequencer.syncState()
+        self._send_midi((0x90, 0, 127))
+        self.schedule_message(1, self.component_map["StepDecoder"].refresh_all_leds)
 
     def create_note_editor(self):
         self._note_editor = ara.NoteEditorComponent(
@@ -207,3 +256,22 @@ class ARA(ControlSurface):
     @listens("devices")
     def __on_devices_changed(self):
         self.try_grab_device()
+
+    @listens("playing_slot_index")
+    def __on_playing_clip_changed(self):
+        if self.target_track is None:
+            return
+        if self.target_track.playing_slot_index < 0:
+            self.target_clip = None
+            return
+
+        if self.target_track.playing_slot_index == self.target_clip_slot_index:
+            return
+
+        self.target_clip_slot_index = self.target_track.playing_slot_index
+        logger.info(f"playing clip changed: {self.target_clip_slot_index}")
+
+        self.target_clip = self.target_track.clip_slots[
+            self.target_clip_slot_index
+        ].clip
+        self.assign_target_clip()

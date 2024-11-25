@@ -47,6 +47,8 @@ class StepDecoder(Component):
 
         # assert sequencer is not None
         self._sequencer = sequencer
+        self.mute_used = False
+        self.mute_lock = False
 
     @property
     def sequencer(
@@ -65,6 +67,8 @@ class StepDecoder(Component):
         self._device = device
         # for encoder, pad in zip(self.encoder_matrix, self._device.drum_pads[36:44]):
         #     encoder.mapped_parameter =
+
+    # def reflect_device(self):
 
     def _pot_to_vol(self, pot):
         return (pot + 1) / 2
@@ -94,7 +98,8 @@ class StepDecoder(Component):
         idx = state.x
         if self._sequencer is None:
             return
-        if self.mute_button.is_pressed:
+        if self.mute_button.is_pressed or self.mute_lock:
+            self.mute_used = True
             self._sequencer.toggle_acc_for_step(idx)
         elif self.shift_button.is_pressed:
             self._sequencer.set_length(idx + 1)
@@ -104,17 +109,23 @@ class StepDecoder(Component):
     @instrument_matrix.value
     def instruments_click(self, _, state):
         idx = state.x
+        logger.info(f"instrument press detected: {idx}; sequencer: {self._sequencer}")
         if self._sequencer is None:
             return
 
-        if self.mute_button.is_pressed:
+        if self.mute_button.is_pressed or self.mute_lock:
+            self.mute_used = True
+            logger.info(f"muting instrument: {idx}")
             self._sequencer.mute_instrument(idx)
             self.update_instrument_leds()
 
         elif self.shift_button.is_pressed:
+            logger.info(f"erasing instrument: {idx}")
             self._sequencer.erase_instrument(idx)
             self.update_leds()
+            self.update_instrument_leds()
         else:
+            logger.info(f"selected instrument: {idx}, updating leds")
             self._sequencer.selected_instrument = idx
             self.update_instrument_leds()
 
@@ -127,6 +138,7 @@ class StepDecoder(Component):
 
         self._sequencer.set_page(idx)
         self.update_page_leds()
+        self.update_leds()
 
     @shift_button.pressed
     def on_shift_pressed(self, *a, **k):
@@ -159,6 +171,15 @@ class StepDecoder(Component):
     def on_mute(self, *a):
         if self.shift_button.is_pressed and self._sequencer is not None:
             self._sequencer.clear_all()
+        else:
+            self.mute_used = False
+
+    @mute_button.released
+    def on_mute_released(self, *a):
+        if not self.mute_used:
+            self.mute_lock = not self.mute_lock
+            # self.send_midi((0xF0, 0x0, self.mute_lock, 0xF7))
+            self.refresh_all_leds()
 
     def refresh_all_leds(self):
         self.update_leds()
@@ -201,18 +222,22 @@ class StepDecoder(Component):
     def update_instrument_leds(self):
         if not self._sequencer:
             return
-
+        logger.info("updating instrument leds, getting instruments")
         instruments, mutted = self._sequencer.get_instruments()
+        logger.info(f"instruments: {instruments}, mutted: {mutted}")
 
         for state, value, is_mutted in zip(self.instrument_matrix, instruments, mutted):
             if is_mutted:
-                state.color = "InstrumentButton.Mutted"
+                if value:
+                    state.color = "InstrumentButton.ActiveMutted"
+                else:
+                    state.color = "InstrumentButton.Mutted"
+
             elif value:
                 state.color = "InstrumentButton.Active"
+
             else:
                 state.color = "InstrumentButton.Inactive"
-
-            # state.color = "DefaultButton.On" if value else "DefaultButton.Off"
 
     def update_page_leds(self):
         if self._sequencer is None:
@@ -221,4 +246,7 @@ class StepDecoder(Component):
         pages[self._sequencer._selected_page] = True
 
         for state, value in zip(self.page_matrix, pages):
-            state.color = "DefaultButton.On" if value else "DefaultButton.Off"
+            if self.mute_lock:
+                state.color = "PageButton.OnLock" if value else "PageButton.Off"
+            else:
+                state.color = "PageButton.OnNormal" if value else "PageButton.Off"

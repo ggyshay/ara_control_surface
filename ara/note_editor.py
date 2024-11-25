@@ -92,6 +92,12 @@ class NoteEditorComponent(Component):
             from_time=0, from_pitch=0, time_span=16, pitch_span=128
         )
 
+    def get_clip_length(self):
+        assert self._has_clip()
+        assert self._clip is not None
+
+        return self._clip.loop_end
+
     def set_clip(self, clip):
         if liveobj_changed(clip, self._clip):
             self._clip = clip
